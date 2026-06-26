@@ -1,4 +1,5 @@
 name: Desktop Release
+run-name: Build ${{ github.ref_name }}
 
 on:
   push:
@@ -10,6 +11,7 @@ permissions:
 
 jobs:
   macos:
+    name: Build macOS
     runs-on: macos-latest
 
     steps:
@@ -22,35 +24,41 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Pake
-        run: npm install
+      - name: Install Dependencies
+        run: npm ci
 
       - name: Build macOS App
+        shell: bash
         run: |
           npx pake https://evven.xyz/desktop \
             --name "Evven" \
             --icon assets/evven-icon.png \
             --targets app
 
-      - name: Create DMG
+      - name: Locate App Bundle
+        id: app
+        shell: bash
         run: |
           APP=$(find . -name "Evven.app" | head -n1)
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
 
+      - name: Create DMG
+        shell: bash
+        run: |
           hdiutil create \
             -volname "Evven" \
-            -srcfolder "$APP" \
+            -srcfolder "${{ steps.app.outputs.app }}" \
             -ov \
             -format UDZO \
-            Evven-${{ github.ref_name }}-macOS.dmg
+            "Evven-${{ github.ref_name }}-macOS.dmg"
 
       - uses: actions/upload-artifact@v4
         with:
           name: macOS
-          path: |
-            *.dmg
-            *.app
+          path: Evven-*.dmg
 
   windows:
+    name: Build Windows
     runs-on: windows-latest
 
     steps:
@@ -63,24 +71,39 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Pake
-        run: npm install
+      - name: Install Dependencies
+        run: npm ci
 
       - name: Build Windows
+        shell: bash
         run: |
-          npx pake https://evven.xyz/desktop ^
-            --name Evven ^
-            --icon assets/evven-icon.png ^
+          npx pake https://evven.xyz/desktop \
+            --name "Evven" \
+            --icon assets/evven-icon.png \
             --targets x64
+
+      - name: Rename Windows Artifacts
+        shell: bash
+        run: |
+          EXE=$(find . -name "*.exe" | head -n1)
+          if [ -n "$EXE" ]; then
+            mv "$EXE" "Evven-${{ github.ref_name }}-Windows.exe"
+          fi
+
+          MSI=$(find . -name "*.msi" | head -n1)
+          if [ -n "$MSI" ]; then
+            mv "$MSI" "Evven-${{ github.ref_name }}-Windows.msi"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
-            **/*.exe
-            **/*.msi
+            Evven-*.exe
+            Evven-*.msi
 
   linux:
+    name: Build Linux
     runs-on: ubuntu-latest
 
     steps:
@@ -93,35 +116,91 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
+      - name: Install Linux Dependencies
         run: |
-          sudo apt update
-          sudo apt install -y \
+          sudo apt-get update
+          sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - name: Install Pake
-        run: npm install
+      - name: Install Dependencies
+        run: npm ci
 
       - name: Build AppImage
+        shell: bash
         run: |
           npx pake https://evven.xyz/desktop \
-            --name Evven \
+            --name "Evven" \
             --icon assets/evven-icon.png \
             --targets appimage
 
       - name: Build DEB
+        shell: bash
         run: |
           npx pake https://evven.xyz/desktop \
-            --name Evven \
+            --name "Evven" \
             --icon assets/evven-icon.png \
             --targets deb
+
+      - name: Rename Linux Artifacts
+        shell: bash
+        run: |
+          APPIMAGE=$(find . -name "*.AppImage" | head -n1)
+          if [ -n "$APPIMAGE" ]; then
+            mv "$APPIMAGE" "Evven-${{ github.ref_name }}-Linux.AppImage"
+          fi
+
+          DEB=$(find . -name "*.deb" | head -n1)
+          if [ -n "$DEB" ]; then
+            mv "$DEB" "Evven-${{ github.ref_name }}-Linux.deb"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux
           path: |
-            **/*.AppImage
-            **/*.deb
+            Evven-*.AppImage
+            Evven-*.deb
+
+  release:
+    name: Publish GitHub Release
+    needs:
+      - macos
+      - windows
+      - linux
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download macOS Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macOS
+          path: release
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: release
+
+      - name: Download Linux Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Evven ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: release/**/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

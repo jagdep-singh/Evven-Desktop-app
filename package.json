@@ -2,8 +2,13 @@
   "name": "evven-desktop",
   "version": "1.0.0",
   "private": true,
+  "description": "Desktop packaging for Evven",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build:mac": "pake https://evven.xyz/desktop --name Evven --icon assets/evven-icon.png --targets app",
+    "build:dmg": "pake https://evven.xyz/desktop --name Evven --icon assets/evven-icon.png --targets dmg",
     "build:windows": "pake https://evven.xyz/desktop --name Evven --icon assets/evven-icon.png --targets x64",
     "build:linux:appimage": "pake https://evven.xyz/desktop --name Evven --icon assets/evven-icon.png --targets appimage",
     "build:linux:deb": "pake https://evven.xyz/desktop --name Evven --icon assets/evven-icon.png --targets deb"
