@@ -1,4 +1,5 @@
 name: Desktop Release
+run-name: Build ${{ github.ref_name }}
 
 on:
   push:
@@ -54,9 +55,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: macOS
-          path: |
-            Evven-*.dmg
-            **/*.app
+          path: Evven-*.dmg
 
   windows:
     name: Build Windows
@@ -83,12 +82,25 @@ jobs:
             --icon assets/evven-icon.png \
             --targets x64
 
+      - name: Rename Windows Artifacts
+        shell: bash
+        run: |
+          EXE=$(find . -name "*.exe" | head -n1)
+          if [ -n "$EXE" ]; then
+            mv "$EXE" "Evven-${{ github.ref_name }}-Windows.exe"
+          fi
+
+          MSI=$(find . -name "*.msi" | head -n1)
+          if [ -n "$MSI" ]; then
+            mv "$MSI" "Evven-${{ github.ref_name }}-Windows.msi"
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
-            **/*.exe
-            **/*.msi
+            Evven-*.exe
+            Evven-*.msi
 
   linux:
     name: Build Linux
@@ -132,9 +144,63 @@ jobs:
             --icon assets/evven-icon.png \
             --targets deb
 
+      - name: Rename Linux Artifacts
+        shell: bash
+        run: |
+          APPIMAGE=$(find . -name "*.AppImage" | head -n1)
+          if [ -n "$APPIMAGE" ]; then
+            mv "$APPIMAGE" "Evven-${{ github.ref_name }}-Linux.AppImage"
+          fi
+
+          DEB=$(find . -name "*.deb" | head -n1)
+          if [ -n "$DEB" ]; then
+            mv "$DEB" "Evven-${{ github.ref_name }}-Linux.deb"
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: linux
           path: |
-            **/*.AppImage
-            **/*.deb
+            Evven-*.AppImage
+            Evven-*.deb
+
+  release:
+    name: Publish GitHub Release
+    needs:
+      - macos
+      - windows
+      - linux
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download macOS Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macOS
+          path: release
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: release
+
+      - name: Download Linux Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Evven ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: release/**/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
